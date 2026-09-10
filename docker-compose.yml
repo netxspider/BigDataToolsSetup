@@ -1,0 +1,54 @@
+services:
+
+  hadoop-master:
+    build:
+      context: ./hadoop-master
+    platform: linux/amd64
+    container_name: hadoop-master
+    hostname: hadoop-master
+
+    ports:
+      - "9870:50070"
+      - "9000:9000"
+      - "10000:10000"
+      - "8888:8888"
+
+    volumes:
+      - namenode:/hadoop/dfs/name
+      - datanode:/hadoop/dfs/data
+
+    networks:
+      - int312
+
+  hbase:
+    image: harisekhon/hbase:latest
+    platform: linux/amd64
+    container_name: hbase
+    hostname: hbase
+
+    ports:
+      - "16010:16010"
+      - "16000:16000"
+      - "16020:16020"
+
+    networks:
+      - int312
+
+  cassandra:
+    image: cassandra:4.1
+    platform: linux/amd64
+    container_name: cassandra
+    hostname: cassandra
+
+    ports:
+      - "9042:9042"
+
+    networks:
+      - int312
+
+networks:
+  int312:
+
+volumes:
+  namenode:
+  datanode:
