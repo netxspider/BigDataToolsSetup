@@ -17,6 +17,16 @@
   </property>
 
   <property>
+    <name>dfs.namenode.checkpoint.dir</name>
+    <value>file:///hadoop/dfs/secondary</value>
+  </property>
+
+  <property>
+    <name>dfs.namenode.checkpoint.edits.dir</name>
+    <value>file:///hadoop/dfs/secondary</value>
+  </property>
+
+  <property>
     <name>dfs.namenode.http-address</name>
     <value>0.0.0.0:50070</value>
   </property>

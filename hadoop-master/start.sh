@@ -10,7 +10,7 @@ export HIVE_HOME=/opt/hive
 export PATH=$JAVA_HOME/bin:$HADOOP_HOME/bin:$HADOOP_HOME/sbin:$HIVE_HOME/bin:$PATH
 
 echo "======================================"
-echo "Starting Hadoop + Hive + Hue"
+echo "Starting Hadoop + YARN + Hive + Hue"
 echo "======================================"
 
 # First-time NameNode initialization
@@ -24,6 +24,9 @@ hdfs namenode > /var/log/namenode.log 2>&1 &
 
 echo "Starting DataNode..."
 hdfs datanode > /var/log/datanode.log 2>&1 &
+
+echo "Starting SecondaryNameNode..."
+hdfs secondarynamenode > /var/log/secondarynamenode.log 2>&1 &
 
 echo "Waiting for HDFS..."
 
@@ -39,6 +42,30 @@ if ! hdfs dfs -ls / >/dev/null 2>&1; then
     echo "ERROR: HDFS failed to start."
     cat /var/log/namenode.log
     cat /var/log/datanode.log
+    cat /var/log/secondarynamenode.log
+    exit 1
+fi
+
+echo "Starting YARN ResourceManager..."
+yarn resourcemanager > /var/log/resourcemanager.log 2>&1 &
+
+echo "Starting YARN NodeManager..."
+yarn nodemanager > /var/log/nodemanager.log 2>&1 &
+
+echo "Waiting for YARN ResourceManager..."
+
+for i in {1..60}; do
+    if nc -z 127.0.0.1 8088 >/dev/null 2>&1; then
+        echo "YARN ResourceManager is ready."
+        break
+    fi
+    sleep 2
+done
+
+if ! nc -z 127.0.0.1 8088 >/dev/null 2>&1; then
+    echo "ERROR: YARN ResourceManager failed."
+    cat /var/log/resourcemanager.log
+    cat /var/log/nodemanager.log
     exit 1
 fi
 
@@ -79,8 +106,8 @@ fi
 echo "Starting Hue..."
 
 echo "Preparing Hue database..."
-rm -f /usr/share/hue/desktop.db
-chown hue:hue /usr/share/hue/desktop.db 2>/dev/null || true
+mkdir -p /opt/hue-data
+chown -R hue:hue /opt/hue-data
 
 echo "Starting Hue..."
 su -s /bin/bash hue -c "cd /usr/share/hue && ./startup.sh" &

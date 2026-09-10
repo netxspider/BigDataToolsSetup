@@ -36,15 +36,17 @@ RUN wget -q https://archive.apache.org/dist/hive/hive-2.3.2/apache-hive-2.3.2-bi
 
 COPY core-site.xml /opt/hadoop/etc/hadoop/core-site.xml
 COPY hdfs-site.xml /opt/hadoop/etc/hadoop/hdfs-site.xml
+COPY yarn-site.xml /opt/hadoop/etc/hadoop/yarn-site.xml
+COPY mapred-site.xml /opt/hadoop/etc/hadoop/mapred-site.xml
 COPY hive-site.xml /opt/hive/conf/hive-site.xml
 COPY hue.ini /usr/share/hue/desktop/conf/z-hue.ini
 COPY start.sh /start.sh
 
 RUN chmod +x /start.sh && \
-    mkdir -p /hadoop/dfs/name /hadoop/dfs/data /opt/hive-data && \
-    chmod -R 777 /hadoop/dfs /opt/hive-data && \
+    mkdir -p /hadoop/dfs/name /hadoop/dfs/data /hadoop/dfs/secondary /opt/hive-data /opt/hue-data && \
+    chmod -R 777 /hadoop/dfs /opt/hive-data /opt/hue-data && \
     chown -R hue:hue /usr/share/hue
 
-EXPOSE 50070 9000 10000 8888
+EXPOSE 50070 8030 8031 8032 8088 9000 10000 8888
 
 CMD ["/start.sh"]

@@ -9,6 +9,7 @@ services:
 
     ports:
       - "9870:50070"
+      - "8088:8088"
       - "9000:9000"
       - "10000:10000"
       - "8888:8888"
@@ -16,6 +17,8 @@ services:
     volumes:
       - namenode:/hadoop/dfs/name
       - datanode:/hadoop/dfs/data
+      - secondarynamenode:/hadoop/dfs/secondary
+      - huedata:/opt/hue-data
 
     networks:
       - int312
@@ -52,3 +55,5 @@ networks:
 volumes:
   namenode:
   datanode:
+  secondarynamenode:
+  huedata:

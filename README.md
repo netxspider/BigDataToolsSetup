@@ -1,7 +1,7 @@
 # BigDataToolsSetup
 
 BigDataToolsSetup is a Docker Compose environment for experimenting with a small,
-single-node big-data stack. It places Hadoop HDFS, Hive, Hue, HBase, and Cassandra
+single-node big-data stack. It places Hadoop HDFS, YARN, Hive, Hue, HBase, and Cassandra
 on one Docker network so that the services can be started together and accessed
 from the host machine.
 
@@ -28,7 +28,8 @@ from the host machine.
 ```
 
 The Compose service named `hadoop-master` is the main integration point. It runs
-the Hadoop NameNode and DataNode, HiveServer2, and Hue in one container. HBase and
+the Hadoop NameNode, DataNode, SecondaryNameNode, YARN ResourceManager, YARN
+NodeManager, HiveServer2, and Hue in one container. HBase and
 Cassandra run as separate containers and share the `int312` Docker network, which
 lets containers resolve one another by service hostname.
 
@@ -36,11 +37,18 @@ lets containers resolve one another by service hostname.
 
 - Hadoop clients use `hdfs://hadoop-master:9000` as the default filesystem.
 - The NameNode serves its web UI and WebHDFS on port `50070` inside the container.
+- The YARN ResourceManager serves its web UI on port `8088` and accepts scheduler
+  requests on port `8032`.
+- The SecondaryNameNode checkpoints NameNode metadata under `/hadoop/dfs/secondary`.
 - Hive stores managed tables under `hdfs://hadoop-master:9000/user/hive/warehouse`.
 - HiveServer2 accepts Thrift connections on `hadoop-master:10000`.
 - Hue connects to HDFS through WebHDFS and to Hive through HiveServer2.
 - The HDFS NameNode directory is persisted in the named Docker volume `namenode`.
 - The HDFS DataNode directory is persisted in the named Docker volume `datanode`.
+- SecondaryNameNode checkpoints are persisted in the named Docker volume
+  `secondarynamenode`.
+- Hue accounts, saved queries, and settings are persisted in the named Docker
+  volume `huedata`.
 
 This is a development and teaching topology, not a production cluster: HDFS
 replication is set to `1`, there is one NameNode and one DataNode, and the local
@@ -76,6 +84,7 @@ persistent volume is configured for Cassandra in the current Compose file.
 | Service | Host port | Container port | Purpose |
 | --- | ---: | ---: | --- |
 | Hadoop NameNode UI / WebHDFS | `9870` | `50070` | HDFS administration and WebHDFS |
+| YARN ResourceManager UI | `8088` | `8088` | YARN job and application monitoring |
 | HDFS | `9000` | `9000` | Hadoop filesystem RPC |
 | HiveServer2 | `10000` | `10000` | Hive Thrift endpoint |
 | Hue | `8888` | `8888` | Browser-based Hadoop and Hive UI |
@@ -88,6 +97,7 @@ From the host, the main interfaces are:
 
 - Hue: http://localhost:8888
 - HDFS NameNode UI: http://localhost:9870
+- YARN ResourceManager: http://localhost:8088
 - HBase UI: http://localhost:16010
 - HiveServer2: `localhost:10000`
 - Cassandra: `localhost:9042`
@@ -120,13 +130,14 @@ The first build downloads the Hadoop and Hive archives and may take several
 minutes. The `hadoop-master` startup script then performs the following sequence:
 
 1. Formats the NameNode only when `/hadoop/dfs/name/current` does not exist.
-2. Starts the NameNode and DataNode and waits for HDFS to answer a filesystem
-   listing request.
-3. Creates `/tmp` and `/user/hive/warehouse` in HDFS and grants them development
-   permissions.
-4. Initializes the embedded Derby metastore when it has not been initialized.
-5. Starts HiveServer2 and waits for port `10000` to accept connections.
-6. Starts Hue and keeps the container process alive.
+2. Starts the NameNode, DataNode, and SecondaryNameNode and waits for HDFS to answer a filesystem
+  listing request.
+3. Starts the YARN ResourceManager and NodeManager and waits for port `8088`.
+4. Creates `/tmp` and `/user/hive/warehouse` in HDFS and grants them development
+  permissions.
+5. Initializes the embedded Derby metastore when it has not been initialized.
+6. Starts HiveServer2 and waits for port `10000` to accept connections.
+7. Starts Hue and keeps the container process alive.
 
 Check the startup logs with:
 
@@ -204,12 +215,13 @@ needed:
 docker compose down -v
 ```
 
-The `namenode` and `datanode` volumes are the durable part of the current setup.
+The `namenode`, `datanode`, `secondarynamenode`, and `huedata` volumes are durable
+parts of the current setup.
 The embedded Hive Derby metastore is stored under `/opt/hive-data` inside the
-`hadoop-master` container and is not mounted as a named volume. Hue deletes and
-recreates `/usr/share/hue/desktop.db` on every startup. As a result, Hive metadata
-and Hue settings should be treated as disposable unless the image or Compose file
-is extended with persistent volumes.
+`hadoop-master` container and is not mounted as a named volume. Hue now stores its
+database at `/opt/hue-data/desktop.db` and does not delete it at startup, so the Hue account
+remains available across container restarts and recreation. Hive metadata remains
+disposable unless `/opt/hive-data` is also moved to a named volume.
 
 ## Repository layout
 
@@ -221,7 +233,9 @@ is extended with persistent volumes.
     ├── Dockerfile              # Builds the combined Hadoop, Hive, and Hue image
     ├── start.sh                # Initializes and starts services in dependency order
     ├── core-site.xml           # Core Hadoop and proxy-user settings
-    ├── hdfs-site.xml           # NameNode, DataNode, WebHDFS, and HDFS settings
+    ├── hdfs-site.xml           # HDFS and SecondaryNameNode settings
+    ├── yarn-site.xml           # ResourceManager and NodeManager settings
+    ├── mapred-site.xml         # MapReduce-on-YARN settings
     ├── hive-site.xml           # Hive warehouse, metastore, and HiveServer2 settings
     └── hue.ini                 # Hue web, HDFS, and Hive integration settings
 ```
@@ -234,7 +248,7 @@ Inspect the container logs and the service-specific log files:
 
 ```bash
 docker compose logs hadoop-master
-docker compose exec hadoop-master sh -c 'cat /var/log/namenode.log; cat /var/log/datanode.log; cat /var/log/hiveserver2.log'
+docker compose exec hadoop-master sh -c 'cat /var/log/namenode.log; cat /var/log/datanode.log; cat /var/log/secondarynamenode.log; cat /var/log/resourcemanager.log; cat /var/log/nodemanager.log; cat /var/log/hiveserver2.log'
 ```
 
 Common causes are insufficient Docker resources, a port already in use, or a
@@ -263,7 +277,8 @@ This repository is intentionally configured for local coursework and development
   or internet-accessible deployment.
 - Services expose administrative and data ports directly on the host.
 - HBase uses the `latest` image tag, so rebuilds can change its runtime version.
-- HDFS has replication factor `1` and no failover.
+- HDFS has replication factor `1` and no failover; SecondaryNameNode is a
+  checkpoint helper, not a standby NameNode.
 - Hive uses embedded Derby rather than a production metastore database.
 - HBase and Cassandra have no Compose-managed persistent volumes.
 
@@ -280,5 +295,5 @@ To remove all project containers, the network, and the HDFS volumes:
 docker compose down -v --remove-orphans
 ```
 
-This permanently deletes the data stored in the `namenode` and `datanode` named
-volumes.
+This permanently deletes the data stored in the `namenode`, `datanode`,
+`secondarynamenode`, and `huedata` named volumes.
