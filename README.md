@@ -91,14 +91,18 @@ docker compose exec hadoop-master hdfs dfs -cat /user/test/file
 docker compose exec hadoop-master hdfs dfsadmin -report
 ```
 
-#### Option C: Hive Shell (Beeline / Hive CLI)
+#### Option C: Hive Shell (Beeline)
+
+> [!IMPORTANT]
+> Because **HiveServer2** runs as a background daemon holding an exclusive lock on the Derby metastore database, always connect using **Beeline** rather than the deprecated direct `hive` CLI.
+
 Connect to HiveServer2 using the standard **Beeline** client:
 ```bash
-docker compose exec -it hadoop-master beeline -u 'jdbc:hive2://localhost:10000/default'
-```
-*Or use the classic Hive CLI:*
-```bash
-docker compose exec -it hadoop-master hive
+# From the project directory (containing docker-compose.yml):
+docker compose exec -it hadoop-master beeline -u 'jdbc:hive2://localhost:10000/default' -n root
+
+# Or from any directory on your computer:
+docker exec -it hadoop-master beeline -u 'jdbc:hive2://localhost:10000/default' -n root
 ```
 *Sample Hive queries to test:*
 ```sql
