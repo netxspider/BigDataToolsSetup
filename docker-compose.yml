@@ -19,6 +19,7 @@ services:
       - datanode:/hadoop/dfs/data
       - secondarynamenode:/hadoop/dfs/secondary
       - huedata:/opt/hue-data
+      - ./workspace:/workspace
 
     networks:
       - int312

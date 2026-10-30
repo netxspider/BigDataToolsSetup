@@ -224,6 +224,221 @@ exit;
 
 ---
 
+## ☕ Java MapReduce Development on macOS
+
+This section provides an end-to-end guide for developing, compiling, packaging, and running Java MapReduce jobs on macOS using this Docker-based environment.
+
+### 🔄 Equivalence to Eclipse + Cloudera QuickStart VM
+
+In academic settings, coursework often assumes students run Eclipse inside a Cloudera QuickStart VirtualBox/VMware image on Linux or Windows. On modern macOS (especially Apple Silicon M1/M2/M3/M4 Macs), Cloudera VMs are notoriously slow, resource-heavy (demanding 8–16 GB of VM memory), or entirely unsupported due to x86 hypervisor incompatibilities.
+
+Our Docker-based setup provides an identical, lightweight, native-feeling developer experience:
+
+| Feature / Step | Traditional Cloudera + Eclipse VM | This Setup (macOS + Docker) |
+| :--- | :--- | :--- |
+| **Code Editor** | Eclipse inside slow Linux VM GUI | VS Code, IntelliJ IDEA, or Cursor directly on macOS |
+| **File Storage** | Inside virtual disk image | Host folder `./workspace` bind-mounted to `/workspace` |
+| **Java & Hadoop SDK** | Cloudera CDH libraries in Eclipse build path | Pre-configured OpenJDK 8 & Hadoop 2.7.4 in container |
+| **Compilation** | Eclipse GUI export to Runnable JAR | One-command `build.sh` using containerized `javac` |
+| **Execution** | Terminal inside VM: `hadoop jar ...` | One-command `run.sh` or `make run` via Docker exec |
+| **HDFS Inspection** | Hue browser / command-line inside VM | Hue at `localhost:8888`, CLI, or `./workspace/output/` |
+| **Host System Overhead** | Heavy (runs full guest OS GUI + daemons) | Minimal (headless Linux containers sharing host kernel) |
+
+---
+
+### 1. Prerequisites
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running on macOS.
+- Standard code editor of your choice (VS Code with Java Extension Pack, IntelliJ IDEA Community, Cursor, etc.).
+- No need to install Hadoop or Java 8 locally on macOS.
+
+---
+
+### 2. Starting the Hadoop Environment
+From the repository root:
+```bash
+# Start all containers in the background
+docker compose up -d
+
+# Or using the convenience Makefile:
+make up
+```
+Check that the containers are healthy:
+```bash
+docker compose ps
+# Or:
+make status
+```
+
+---
+
+### 3. Shared Workspace Directory Layout
+
+The `./workspace` directory on your Mac is bind-mounted directly to `/workspace` inside `hadoop-master`. Any changes you make locally are immediately reflected inside the container, and any JARs or outputs produced by Hadoop are instantly visible on your Mac.
+
+```text
+workspace/
+├── input/                             # Host staging folder for raw input datasets
+│   └── data.txt                       # Shared test input sample
+├── projects/                          # Source code for assignments
+│   ├── WordCount/                     # Complete working WordCount application
+│   │   ├── src/com/bigdata/WordCount.java
+│   │   ├── classes/                   # Compiled bytecode (.class)
+│   │   ├── input/data.txt             # Local sample input
+│   │   ├── build.sh                   # Build & packaging script
+│   │   ├── run.sh                     # Upload & YARN execution script
+│   │   └── README.md                  # Project details
+│   ├── MatrixMultiplication/          # Scaffolding for Matrix Multiplication
+│   └── Sorting/                       # Scaffolding for Sorting assignment
+├── templates/
+│   └── java-mapreduce/                # Reusable boilerplate template for new assignments
+│       ├── src/com/bigdata/Main.java
+│       ├── build.sh
+│       ├── run.sh
+│       └── README.md
+├── jars/                              # Output directory for all compiled JAR files
+│   └── WordCount.jar
+└── output/                            # Local copies of results retrieved from HDFS
+    └── wordcount-output.txt
+```
+
+---
+
+### 4. Step-by-Step Development Workflow
+
+#### Step A: Write Java Source Locally on macOS
+Open the repository in VS Code or IntelliJ. Open `workspace/projects/WordCount/src/com/bigdata/WordCount.java` to view or edit the source code. You write and edit your code locally with full syntax highlighting and IDE features.
+
+#### Step B: Compile and Package the JAR
+Compile the Java files using the OpenJDK 8 compiler and Hadoop libraries inside the container:
+```bash
+# Using Docker Compose:
+docker compose exec hadoop-master bash /workspace/projects/WordCount/build.sh
+
+# Or using Makefile:
+make build
+```
+*What happens:*
+- Checks for `javac` and `hadoop` inside the container.
+- Resolves all required MapReduce dependencies using `hadoop classpath`.
+- Compiles the source files with target Java 8 bytecode compatibility (`-source 1.8 -target 1.8`).
+- Creates `WordCount.jar` in both `/workspace/projects/WordCount/` and `/workspace/jars/WordCount.jar`.
+- The JAR immediately appears in your macOS file explorer under `workspace/jars/WordCount.jar`.
+
+#### Step C: Execute the Job on Hadoop YARN
+Execute the packaged JAR on the Hadoop cluster:
+```bash
+# Using Docker Compose:
+docker compose exec hadoop-master bash /workspace/projects/WordCount/run.sh
+
+# Or using Makefile:
+make run
+```
+*What happens:*
+- Checks that `WordCount.jar` exists.
+- Creates the dedicated HDFS input directory `/wordcount/input`.
+- Uploads `workspace/projects/WordCount/input/data.txt` into HDFS.
+- Safely cleans previous runs by removing **only** the dedicated `/wordcount/output` directory.
+- Submits the job to YARN via `hadoop jar`.
+- Streams job progress (Map 0% -> Map 100% -> Reduce 100%).
+- Prints the output directly in your terminal.
+- Saves a mirror of the results to `workspace/output/wordcount-output.txt` on your Mac.
+
+#### Step D: View Results
+View the generated output directly from HDFS:
+```bash
+docker compose exec hadoop-master hdfs dfs -cat /wordcount/output/part-r-00000
+
+# Or view all output parts using Makefile:
+make output
+```
+Or view the output file on macOS:
+```bash
+cat workspace/output/wordcount-output.txt
+```
+
+Expected output for the sample data (`Hello Hadoop Hello MapReduce Big Data Hadoop`):
+```text
+Big	1
+Data	1
+Hadoop	2
+Hello	2
+MapReduce	1
+```
+
+---
+
+### 5. Accessing the Container Shell Directly
+If you want to explore the container environment interactively:
+```bash
+# Enter interactive bash shell
+docker compose exec -it hadoop-master bash
+
+# Or:
+make shell
+```
+Inside the container, all environment variables (`JAVA_HOME`, `HADOOP_HOME`, `HADOOP_CONF_DIR`, `PATH`) are pre-configured:
+```bash
+# Check compiler and Hadoop versions
+javac -version
+hadoop version
+
+# List HDFS directories
+hdfs dfs -ls /
+
+# Run YARN application list
+yarn application -list
+```
+
+---
+
+### 6. Creating Additional Java MapReduce Assignments
+
+To create a new assignment (e.g., `MatrixMultiplication` or `Sorting`):
+
+#### Step 1: Copy the Template
+```bash
+cp -r workspace/templates/java-mapreduce workspace/projects/MatrixMultiplication
+```
+
+#### Step 2: Implement Your Logic
+1. Open `workspace/projects/MatrixMultiplication/src/com/bigdata/Main.java`.
+2. Implement your custom `Mapper` and `Reducer` classes.
+3. Configure the output key and value types in `main()`.
+4. Place your test input data in `workspace/projects/MatrixMultiplication/input/data.txt`.
+
+#### Step 3: Build the Assignment JAR
+```bash
+docker compose exec hadoop-master bash /workspace/projects/MatrixMultiplication/build.sh MatrixMultiplication
+```
+
+#### Step 4: Run the Assignment on YARN
+```bash
+docker compose exec hadoop-master bash /workspace/projects/MatrixMultiplication/run.sh \
+  com.bigdata.Main \
+  MatrixMultiplication \
+  /matrix/input \
+  /matrix/output
+```
+
+#### Step 5: View Results
+```bash
+docker compose exec hadoop-master hdfs dfs -cat /matrix/output/part-*
+```
+
+---
+
+### 7. Common Errors & Troubleshooting
+
+| Error | Root Cause | Solution |
+| :--- | :--- | :--- |
+| `UnsupportedClassVersionError: ... has been compiled by a more recent version of the Java Runtime` | Code was compiled locally on macOS using Java 11, 17, or 21 instead of Java 8. | Always compile using `build.sh` via `docker compose exec hadoop-master bash /workspace/.../build.sh`. This ensures bytecode targets Java 8 (version 52.0). |
+| `FileAlreadyExistsException: Output directory /... already exists` | Hadoop MapReduce protects against accidental overwriting by requiring the output directory to NOT exist before execution. | The provided `run.sh` script automatically removes the dedicated job output directory before starting. If running `hadoop jar` manually, remove it first: `hdfs dfs -rm -r /path/output`. |
+| `ClassNotFoundException: com.bigdata.WordCount` | The class name specified in the command does not match the package or class name in the JAR. | Ensure the class argument includes the full package name (`com.bigdata.WordCount`) and matches `package com.bigdata;` in your Java source. |
+| `Permission denied` on `.sh` scripts | Shell script files lost execution bit permissions on host. | Run `chmod +x workspace/projects/*/*.sh workspace/templates/*/*.sh` on your macOS host terminal. |
+| YARN Container Memory allocation failure | Job requested more memory than allocated to NodeManager. | Our environment configures containers with 512MB memory allocations (`mapred-site.xml`). Do not request > 2048MB per container in custom configuration. |
+
+---
+
 ## 📜 Startup Logs & Service Verification
 
 Each service initializes in a specific order. Monitoring the logs allows you to verify healthy operation.
@@ -371,17 +586,33 @@ docker compose down -v
 
 ```text
 .
-├── docker-compose.yml          # Service definitions, ports, network, and volumes
-├── README.md                   # Architecture, quick start, and operation guide
-└── hadoop-master/
-    ├── Dockerfile              # Builds the combined Hadoop, Hive, and Hue image
-    ├── start.sh                # Initializes and starts services in dependency order
-    ├── core-site.xml           # Core Hadoop and proxy-user settings
-    ├── hdfs-site.xml           # HDFS and SecondaryNameNode settings
-    ├── yarn-site.xml           # ResourceManager and NodeManager settings
-    ├── mapred-site.xml         # MapReduce-on-YARN settings
-    ├── hive-site.xml           # Hive warehouse, metastore, and HiveServer2 settings
-    └── hue.ini                 # Hue web, HDFS, and Hive integration settings
+├── docker-compose.yml          # Service definitions, ports, network, and persistent volumes
+├── Makefile                    # Developer shortcuts for build, run, test, and container control
+├── README.md                   # Architecture, quick start, MapReduce guide, and operations
+├── hadoop-master/
+│   ├── Dockerfile              # Builds the combined Hadoop, Hive, and Hue image
+│   ├── start.sh                # Initializes and starts services in dependency order
+│   ├── core-site.xml           # Core Hadoop and proxy-user settings
+│   ├── hdfs-site.xml           # HDFS and SecondaryNameNode settings
+│   ├── yarn-site.xml           # ResourceManager and NodeManager settings
+│   ├── mapred-site.xml         # MapReduce-on-YARN settings
+│   ├── hive-site.xml           # Hive warehouse, metastore, and HiveServer2 settings
+│   └── hue.ini                 # Hue web, HDFS, and Hive integration settings
+└── workspace/                  # Shared host-container workspace (bind mounted to /workspace)
+    ├── input/                  # Staging for raw datasets
+    ├── projects/               # Assignments and MapReduce projects
+    │   ├── WordCount/          # Fully implemented reference MapReduce application
+    │   │   ├── src/com/bigdata/WordCount.java
+    │   │   ├── input/data.txt
+    │   │   ├── build.sh
+    │   │   ├── run.sh
+    │   │   └── README.md
+    │   ├── MatrixMultiplication/ # Scaffolding for matrix multiplication
+    │   └── Sorting/            # Scaffolding for sorting assignment
+    ├── templates/
+    │   └── java-mapreduce/     # Reusable boilerplate template for new assignments
+    ├── jars/                   # Compiled executable JAR files
+    └── output/                 # Results retrieved from HDFS
 ```
 
 ---

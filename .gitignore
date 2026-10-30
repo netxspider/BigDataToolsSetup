@@ -1,0 +1,31 @@
+# macOS system files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Java & MapReduce build artifacts
+*.class
+*.jar
+!*/.gitkeep
+
+# Project classes and output directories
+workspace/projects/*/classes/*
+!workspace/projects/*/classes/.gitkeep
+workspace/templates/*/classes/*
+!workspace/templates/*/classes/.gitkeep
+workspace/jars/*
+!workspace/jars/.gitkeep
+workspace/output/*
+!workspace/output/.gitkeep
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# Logs and temporary files
+*.log
+*.tmp
