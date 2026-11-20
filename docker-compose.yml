@@ -19,6 +19,7 @@ services:
       - datanode:/hadoop/dfs/data
       - secondarynamenode:/hadoop/dfs/secondary
       - huedata:/opt/hue-data
+      - hivedata:/opt/hive-data
       - ./workspace:/workspace
 
     networks:
@@ -58,3 +59,4 @@ volumes:
   datanode:
   secondarynamenode:
   huedata:
+  hivedata:

@@ -52,6 +52,9 @@ yarn resourcemanager > /var/log/resourcemanager.log 2>&1 &
 echo "Starting YARN NodeManager..."
 yarn nodemanager > /var/log/nodemanager.log 2>&1 &
 
+echo "Starting MapReduce JobHistoryServer..."
+mr-jobhistory-daemon.sh start historyserver > /var/log/historyserver.log 2>&1 &
+
 echo "Waiting for YARN ResourceManager..."
 
 for i in {1..60}; do
@@ -108,6 +111,8 @@ echo "Starting Hue..."
 echo "Preparing Hue database..."
 mkdir -p /opt/hue-data
 chown -R hue:hue /opt/hue-data
+chmod 777 /opt/hue-data
+python3 -c "import sqlite3; con=sqlite3.connect('/opt/hue-data/desktop.db'); con.execute('PRAGMA journal_mode=WAL;'); con.execute('PRAGMA busy_timeout=30000;'); con.close()" 2>/dev/null || true
 
 echo "Starting Hue..."
 su -s /bin/bash hue -c "cd /usr/share/hue && ./startup.sh" &

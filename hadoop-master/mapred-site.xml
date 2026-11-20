@@ -12,14 +12,26 @@
   <!-- ADD THESE NEW PROPERTIES BELOW -->
   <property>
     <name>yarn.app.mapreduce.am.resource.mb</name>
-    <value>512</value>
+    <value>1024</value>
+  </property>
+  <property>
+    <name>yarn.app.mapreduce.am.command-opts</name>
+    <value>-Xmx768m</value>
   </property>
   <property>
     <name>mapreduce.map.memory.mb</name>
-    <value>512</value>
+    <value>1024</value>
+  </property>
+  <property>
+    <name>mapreduce.map.java.opts</name>
+    <value>-Xmx768m</value>
   </property>
   <property>
     <name>mapreduce.reduce.memory.mb</name>
-    <value>512</value>
+    <value>1024</value>
+  </property>
+  <property>
+    <name>mapreduce.reduce.java.opts</name>
+    <value>-Xmx768m</value>
   </property>
 </configuration>
